@@ -1,10 +1,10 @@
 #!/bin/bash
 # centos7/8 trojan WordPress一键安装脚本
-# Author: hijk<https://www.hijk.pw>
+# Author: hijk<https://hijk.art>
 
 echo "#############################################################"
 echo "#             CentOS 7/8 WordPress一键安装脚本                #"
-echo "# 网址: https://www.hijk.pw                                 #"
+echo "# 网址: https://hijk.art                                  #"
 echo "# 作者: hijk                                                #"
 echo "#############################################################"
 echo ""
@@ -38,7 +38,7 @@ function checkSystem()
 
 function checkTrojan()
 {
-    echo "该脚本仅适用于 https://www.hijk.pw 网站的trojan一键脚本 安装wordpress用！"
+    echo "该脚本仅适用于 https://hijk.art 网站的trojan一键脚本 安装wordpress用！"
     read -p "退出请按n，按其他键继续：" answer
     [ "$answer" = "n" ] && exit 0
 
@@ -47,7 +47,7 @@ function checkTrojan()
         exit 1
     fi
     CONFIG_FILE=/usr/local/etc/trojan/config.json
-    domain=`grep cert $CONFIG_FILE | awk 'BEGIN { FS = "/" } ; { print $5 }'`
+    domain=`grep -m1 cert $CONFIG_FILE | awk 'BEGIN { FS = "/" } ; { print $5 }'`
     if [ ! -f /etc/nginx/conf.d/${domain}.conf ]; then
         echo "未找到域名的nginx配置文件"
         exit 1

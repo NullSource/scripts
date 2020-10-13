@@ -1,10 +1,10 @@
 #!/bin/bash
 # v2ray Ubuntu系统一键安装脚本
-# Author: hijk<https://www.hijk.pw>
+# Author: hijk<https://hijk.art>
 
 echo "#############################################################"
 echo "#         Ubuntu 16.04 TLS v2ray 带一键安装脚本              #"
-echo "# 网址: https://www.hijk.pw                                 #"
+echo "# 网址: https://hijk.art                                  #"
 echo "# 作者: hijk                                                #"
 echo "#############################################################"
 echo ""
@@ -49,6 +49,10 @@ function getData()
     do
         read -p "请输入v2ray的端口[1-65535]:" port
         [ -z "$port" ] && port="21568"
+        if [ "${port:0:1}" = "0" ]; then
+            echo -e "${red}端口不能以0开头${plain}"
+            exit 1
+        fi
         expr $port + 0 &>/dev/null
         if [ $? -eq 0 ]; then
             if [ $port -ge 1 ] && [ $port -le 65535 ]; then
@@ -86,14 +90,11 @@ function preinstall()
 function installV2ray()
 {
     echo 安装v2ray...
-    bash <(curl -L -s https://install.direct/go.sh)
+    bash <(curl -sL https://raw.githubusercontent.com/hijkpw/scripts/master/goV2.sh)
 
     if [ ! -f /etc/v2ray/config.json ]; then
-        bash <(curl -sL https://raw.githubusercontent.com/hijkpw/scripts/master/goV2.sh)
-        if [ ! -f /etc/v2ray/config.json ]; then
-            echo "安装失败，请到 https://www.hijk.pw 网站反馈"
-            exit 1
-        fi
+        echo "安装失败，请到 https://hijk.art 网站反馈"
+        exit 1
     fi
 
     sed -i -e "s/port\":.*[0-9]*,/port\": ${port},/" /etc/v2ray/config.json
@@ -101,17 +102,29 @@ function installV2ray()
     if [ "${logsetting}" = "" ]; then
         sed -i '1a\  "log": {\n    "loglevel": "info",\n    "access": "/var/log/v2ray/access.log",\n    "error": "/var/log/v2ray/error.log"\n  },' /etc/v2ray/config.json
     fi
-    alterid=`shuf -i50-90 -n1`
+    alterid=`shuf -i50-80 -n1`
     sed -i -e "s/alterId\":.*[0-9]*/alterId\": ${alterid}/" /etc/v2ray/config.json
     uid=`cat /etc/v2ray/config.json | grep id | cut -d: -f2 | tr -d \",' '`
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+    echo "0 3 */3 * * root echo '' > /var/log/v2ray/access.log; echo ''>/var/log/v2ray/error.log" >> /etc/crontab
     ntpdate -u time.nist.gov
-    systemctl enable v2ray && systemctl restart v2ray
+    systemctl enable v2ray
+    systemctl restart v2ray
     sleep 3
-    res=`netstat -nltp | grep ${port} | grep v2ray`
+    res=`netstat -ntlp| grep ${port} | grep v2ray`
     if [ "${res}" = "" ]; then
-        echo "v2ray启动失败，请检查端口是否被占用！"
-        exit 1
+        sed -i '/Capabili/d' /etc/systemd/system/v2ray.service
+        sed -i '/AmbientCapabilities/d' /etc/systemd/system/v2ray.service
+        sed -i '/Capabili/d' /etc/systemd/system/multi-user.target.wants/v2ray.service
+        sed -i '/AmbientCapabilities/d' /etc/systemd/system/multi-user.target.wants/v2ray.service
+        systemctl daemon-reload
+        systemctl restart v2ray
+        sleep 3
+        res=`netstat -ntlp| grep ${port} | grep v2ray`
+        if [ "${res}" = "" ]; then
+            echo "端口号：${port}，v2启动失败，请检查端口是否被占用！"
+            exit 1
+         fi
     fi
     echo "v2ray安装成功！"
 }
@@ -162,7 +175,23 @@ function info()
     res=`cat /etc/v2ray/config.json | grep network`
     [ -z "$res" ] && network="tcp" || network=`cat /etc/v2ray/config.json | grep network | cut -d: -f2 | tr -d \",' '`
     security="auto"
-    
+        
+    raw="{
+  \"v\":\"2\",
+  \"ps\":\"\",
+  \"add\":\"$ip\",
+  \"port\":\"${port}\",
+  \"id\":\"${uid}\",
+  \"aid\":\"$alterid\",
+  \"net\":\"tcp\",
+  \"type\":\"none\",
+  \"host\":\"\",
+  \"path\":\"\",
+  \"tls\":\"\"
+}"
+    link=`echo -n ${raw} | base64 -w 0`
+    link="vmess://${link}"
+
     echo ============================================
     echo -e " v2ray运行状态：${status}"
     echo -e " v2ray配置文件：${red}/etc/v2ray/config.json${plain}"
@@ -173,9 +202,9 @@ function info()
     echo -e " id(uuid)：${red}${uid}${plain}"
     echo -e " 额外id(alterid)： ${red}${alterid}${plain}"
     echo -e " 加密方式(security)： ${red}$security${plain}"
-    echo -e " 传输协议(network)： ${red}${network}${plain}" 
-    echo  
-    echo ============================================
+    echo -e " 传输协议(network)： ${red}${network}${plain}"
+    echo
+    echo "vmess链接: $link"
 }
 
 function bbrReboot()
@@ -219,6 +248,7 @@ function uninstall()
         rm -rf /usr/bin/v2ray/*
         rm -rf /var/log/v2ray/*
         rm -rf /etc/systemd/system/v2ray.service
+        rm -rf /etc/systemd/system/multi-user.target.wants/v2ray.service
         
         echo -e " ${red}卸载成功${plain}"
     fi

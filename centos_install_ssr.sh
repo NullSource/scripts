@@ -1,10 +1,10 @@
 #!/bin/bash
 # shadowsocksR/SSR CentOS 7/8一键安装教程
-# Author: hijk<https://www.hijk.pw>
+# Author: hijk<https://hijk.art>
 
 echo "#############################################################"
-echo "#         CentOS 7/8 ShadowsocksR/SSR 一键安装脚本          #"
-echo "# 网址: https://www.hijk.pw                                 #"
+echo "#         CentOS 7/8 ShadowsocksR/SSR 一键安装脚本           #"
+echo "# 网址: https://hijk.art                                  #"
 echo "# 作者: hijk                                                #"
 echo "#############################################################"
 echo ""
@@ -53,6 +53,10 @@ function getData()
     do
         read -p "请设置SSR的端口号[1-65535]:" port
         [ -z "$port" ] && port="12345"
+        if [ "${port:0:1}" = "0" ]; then
+            echo -e "${red}端口不能以0开头${plain}"
+            exit 1
+        fi
         expr $port + 0 &>/dev/null
         if [ $? -eq 0 ]; then
             if [ $port -ge 1 ] && [ $port -le 65535 ]; then
@@ -240,7 +244,7 @@ function preinstall()
         yum update -y
     fi
     echo "安装必要软件"
-    yum install -y epel-release telnet curl wget vim net-tools libsodium openssl unzip tar
+    yum install -y epel-release telnet curl wget vim net-tools libsodium openssl unzip tar qrencode
     res=`which wget`
     [ "$?" != "0" ] && yum install -y wget
     res=`which netstat`
@@ -269,7 +273,7 @@ function installSSR()
         tar -zxf ${FILENAME}.tar.gz
         mv shadowsocksr-3.2.2/shadowsocks /usr/local
         if [ ! -f /usr/local/shadowsocks/server.py ]; then
-            echo "安装失败，请到 https://www.hijk.pw 网站反馈"
+            echo "安装失败，请到 https://hijk.art 网站反馈"
             cd ${BASE} && rm -rf shadowsocksr-3.2.2 ${FILENAME}.tar.gz
             exit 1
         fi
@@ -298,7 +302,7 @@ EOF
 cat > /usr/lib/systemd/system/shadowsocksR.service <<-EOF
 [Unit]
 Description=shadowsocksR
-Documentation=https://www.hijk.pw/
+Documentation=https://hijk.art/
 After=network-online.target
 Wants=network-online.target
 
@@ -370,6 +374,7 @@ function installBBR()
 
 function info()
 {
+    yum install -y qrencode
     ip=`curl -s -4 icanhazip.com`
     port=`cat /etc/shadowsocksR.json | grep server_port | cut -d: -f2 | tr -d \",' '`
     res=`netstat -nltp | grep ${port} | grep python`
@@ -379,6 +384,12 @@ function info()
     protocol=`cat /etc/shadowsocksR.json | grep protocol | cut -d: -f2 | tr -d \",' '`
     obfs=`cat /etc/shadowsocksR.json | grep obfs | cut -d: -f2 | tr -d \",' '`
     
+    p1=`echo -n ${password} | base64 -w 0`
+    p1=`echo -n ${p1} | tr -d =`
+    res=`echo -n "${ip}:${port}:${protocol}:${method}:${obfs}:${p1}/?remarks=&protoparam=&obfsparam=" | base64 -w 0`
+    res=`echo -n ${res} | tr -d =`
+    link="ssr://${res}"
+
     echo ============================================
     echo -e " ssr运行状态：${status}"
     echo -e " ssr配置文件：${red}/etc/shadowsocksR.json${plain}"
@@ -390,8 +401,9 @@ function info()
     echo -e " 加密方式(method)： ${red}${method}${plain}"
     echo -e " 协议(protocol)：" ${red}${protocol}${plain}
     echo -e " 混淆(obfuscation)：" ${red}${obfs}${plain}
-    echo  
-    echo ============================================
+    echo
+    echo " ssr链接: $link"
+    qrencode -o - -t utf8 $link
 }
 
 function bbrReboot()

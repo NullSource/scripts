@@ -1,10 +1,10 @@
 #!/bin/bash
 # v2ray Ubuntu系统一键安装脚本
-# Author: hijk<https://www.hijk.pw>
+# Author: hijk<https://hijk.pp.a>
 
 echo "#############################################################"
 echo "#         Ubuntu 16.04 TLS v2ray 带伪装一键安装脚本           #"
-echo "# 网址: https://www.hijk.pw                                 #"
+echo "# 网址: https://hijk.art                                  #"
 echo "# 作者: hijk                                                #"
 echo "#############################################################"
 echo ""
@@ -21,9 +21,10 @@ https://www.quledu.net/
 http://www.ddxsku.com/
 http://www.biqu6.com/
 https://www.wenshulou.cc/
-https://www.php.baby/
-https://www.golglo.com/
-http://www.aiduxshuo.com/
+http://www.auutea.com/
+http://www.55shuba.com/
+http://www.39shubao.com/
+https://www.23xsw.cc/
 )
 
 function checkSystem()
@@ -58,7 +59,6 @@ function checkSystem()
 
 function getData()
 {
-    apt install -y dnsutils curl
     IP=`curl -s -4 icanhazip.com`
     echo " "
     echo " 本脚本为带伪装的一键脚本，运行之前请确认如下条件已经具备："
@@ -78,12 +78,12 @@ function getData()
         fi
     done
     
-    res=`host ${domain}`
-    res=`echo -n ${res} | grep ${IP}`
+    domain=${domain,,}
+    resolve=`curl -s https://hijk.art/hostip.php?d=${domain}`
+    res=`echo -n ${resolve} | grep ${IP}`
     if [ -z "${res}" ]; then
-        echo -n "${domain} 解析结果："
-        host ${domain}
-        echo "主机未解析到当前服务器IP(${IP})!"
+        echo "${domain} 解析结果：${resolve}"
+        echo -e "${red}主机未解析到当前服务器IP(${IP})!${plain}"
         exit 1
     fi
 
@@ -103,6 +103,10 @@ function getData()
     
     read -p "请输入Nginx端口[100-65535的一个数字，默认443]：" port
     [ -z "${port}" ] && port=443
+    if [ "${port:0:1}" = "0" ]; then
+        echo -e "${red}端口不能以0开头${plain}"
+        exit 1
+    fi
     
     read -p "是否安装BBR（安装请按y，不安装请输n，不输则默认安装）:" needBBR
     [ -z "$needBBR" ] && needBBR=y
@@ -115,7 +119,7 @@ function getData()
         index=`shuf -i0-${len} -n1`
         site=${sites[$index]}
         host=`echo ${site} | cut -d/ -f3`
-        ip=`host ${host} | grep -oE "[1-9][0-9.]+[0-9]" | head -n1`
+        ip=`curl -s https://hijk.art/hostip.php?d=${host} | grep -oE "[1-9][0-9.]+[0-9]"`
         if [ "$ip" != "" ]; then
             echo "${ip}  ${host}" >> /etc/hosts
             break
@@ -144,21 +148,18 @@ function preinstall()
 function installV2ray()
 {
     echo 安装v2ray...
-    bash <(curl -L -s https://install.direct/go.sh)
+    bash <(curl -sL https://raw.githubusercontent.com/hijkpw/scripts/master/goV2.sh)
 
     if [ ! -f /etc/v2ray/config.json ]; then
-        bash <(curl -sL https://raw.githubusercontent.com/hijkpw/scripts/master/goV2.sh)
-        if [ ! -f /etc/v2ray/config.json ]; then
-            echo "安装失败，请到 https://www.hijk.pw 网站反馈"
-            exit 1
-        fi
+        echo "安装失败，请到 https://hijk.art 网站反馈"
+        exit 1
     fi
 
     logsetting=`cat /etc/v2ray/config.json|grep loglevel`
     if [ "${logsetting}" = "" ]; then
         sed -i '1a\  "log": {\n    "loglevel": "info",\n    "access": "/var/log/v2ray/access.log",\n    "error": "/var/log/v2ray/error.log"\n  },' /etc/v2ray/config.json
     fi
-    alterid=`shuf -i50-90 -n1`
+    alterid=0
     sed -i -e "s/alterId\":.*[0-9]*/alterId\": ${alterid}/" /etc/v2ray/config.json
     uid=`cat /etc/v2ray/config.json | grep id | cut -d: -f2 | tr -d \",' '`
     v2port=`cat /etc/v2ray/config.json | grep port | cut -d: -f2 | tr -d \",' '`
@@ -173,12 +174,24 @@ function installV2ray()
     else
         sed -i -e "s/path\":.*/path\": \"\\${path}\",/" /etc/v2ray/config.json
     fi
-    systemctl enable v2ray && systemctl restart v2ray
+    echo "0 3 */3 * * root echo '' > /var/log/v2ray/access.log; echo ''>/var/log/v2ray/error.log" >> /etc/crontab
+    systemctl enable v2ray
+    systemctl restart v2ray
     sleep 3
-    res=`netstat -nltp | grep ${v2port} | grep v2ray`
+    res=`netstat -ntlp| grep ${v2port} | grep v2ray`
     if [ "${res}" = "" ]; then
-        echo "v2ray启动失败，请检查端口是否被占用或伪装路径是否有特殊字符！"
-        exit 1
+        sed -i '/Capabili/d' /etc/systemd/system/v2ray.service
+        sed -i '/AmbientCapabilities/d' /etc/systemd/system/v2ray.service
+        sed -i '/Capabili/d' /etc/systemd/system/multi-user.target.wants/v2ray.service
+        sed -i '/AmbientCapabilities/d' /etc/systemd/system/multi-user.target.wants/v2ray.service
+        systemctl daemon-reload
+        systemctl restart v2ray
+        sleep 3
+        res=`netstat -ntlp| grep ${v2port} | grep v2ray`
+        if [ "${res}" = "" ]; then
+            echo "端口号：${port}，伪装路径：${path}， v2启动失败，请检查端口是否被占用或伪装路径是否有特殊字符！！"
+            exit 1
+         fi
     fi
     echo "v2ray安装成功！"
 }
@@ -187,7 +200,7 @@ function installNginx()
 {
     apt install -y nginx
     systemctl stop nginx
-    res=`netstat -ntlp| grep -E ':80|:443'`
+    res=`netstat -ntlp| grep -E ':80 |:443 '`
     if [ "${res}" != "" ]; then
         echo " 其他进程占用了80或443端口，请先关闭再运行一键脚本"
         echo " 端口占用信息如下："
@@ -200,7 +213,7 @@ function installNginx()
     fi
     res=`which pip3`
     if [ "$?" != "0" ]; then
-        echo -e " pip3安装失败，请到 ${red}https://www.hijk.pw${plain} 反馈"
+        echo -e " pip3安装失败，请到 ${red}https://hijk.pp.a${plain} 反馈"
         exit 1
     fi
     pip3 install --upgrade pip
@@ -220,13 +233,15 @@ function installNginx()
     fi
     certbot certonly --standalone --agree-tos --register-unsafely-without-email -d ${domain}
     if [ "$?" != "0" ]; then
-        echo -e " 获取证书失败，请到 ${red}https://www.hijk.pw${plain} 反馈"
+        echo -e " 获取证书失败，请到 ${red}https://hijk.art${plain} 反馈"
         exit 1
     fi
 
     if [ ! -f /etc/nginx/nginx.conf.bak ]; then
         mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
     fi
+    echo 'User-Agent: *' > /usr/share/nginx/html/robots.txt
+    echo 'Disallow: /' >> /usr/share/nginx/html/robots.txt
     cat > /etc/nginx/nginx.conf<<-EOF
 user www-data;
 worker_processes auto;
@@ -294,6 +309,8 @@ server {
     location / {
         proxy_pass $site;
     }
+    location = /robots.txt {
+    }
 
     location ${path} {
       proxy_redirect off;
@@ -315,7 +332,7 @@ EOF
     sleep 3
     res=`netstat -nltp | grep ${port} | grep nginx`
     if [ "${res}" = "" ]; then
-        echo -e "nginx启动失败！ 请到 ${red}https://www.hijk.pw${plain} 反馈"
+        echo -e "nginx启动失败！ 请到 ${red}https://hijk.art${plain} 反馈"
         exit 1
     fi
 }
@@ -388,11 +405,28 @@ function info()
     res=`netstat -nltp | grep ${port} | grep nginx`
     [ -z "$res" ] && ngstatus="${red}已停止${plain}" || ngstatus="${green}正在运行${plain}"
     
+    raw="{
+  \"v\":\"2\",
+  \"ps\":\"\",
+  \"add\":\"$ip\",
+  \"port\":\"${port}\",
+  \"id\":\"${uid}\",
+  \"aid\":\"$alterid\",
+  \"net\":\"${network}\",
+  \"type\":\"none\",
+  \"host\":\"${domain}\",
+  \"path\":\"${path}\",
+  \"tls\":\"tls\"
+}"
+    link=`echo -n ${raw} | base64 -w 0`
+    link="vmess://${link}"
+
+    
     echo ============================================
     echo -e " v2ray运行状态：${v2status}"
     echo -e " v2ray配置文件：${red}/etc/v2ray/config.json${plain}"
     echo -e " nginx运行状态：${ngstatus}"
-    echo -e " nginx配置文件：${red}/etc/nginx/conf.d/${domain}.conf${plain}"
+    echo -e " nginx配置文件：${red}${confpath}${domain}.conf${plain}"
     echo ""
     echo -e "${red}v2ray配置信息：${plain}               "
     echo -e " IP(address):  ${red}${ip}${plain}"
@@ -405,7 +439,7 @@ function info()
     echo -e " 路径(path)：${red}${path}${plain}"
     echo -e " 安全传输(security)：${red}TLS${plain}"
     echo  
-    echo ============================================
+    echo "vmess链接: $link"
 }
 
 function bbrReboot()
@@ -451,6 +485,7 @@ function uninstall()
         rm -rf /usr/bin/v2ray/*
         rm -rf /var/log/v2ray/*
         rm -rf /etc/systemd/system/v2ray.service
+        rm -rf /etc/systemd/system/multi-user.target.wants/v2ray.service
 
         apt remove -y nginx
         apt autoremove -y

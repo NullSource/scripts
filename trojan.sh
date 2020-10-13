@@ -1,10 +1,10 @@
 #!/bin/bash
 # trojan一键安装脚本
-# Author: hijk<https://www.hijk.pw>
+# Author: hijk<https://hijk.art>
 
 echo "#############################################################"
 echo "#                      trojan一键安装脚本                    #"
-echo "# 网址: https://www.hijk.pw                                 #"
+echo "# 网址: https://hijk.art                                  #"
 echo "# 作者: hijk                                                #"
 echo "#############################################################"
 echo ""
@@ -21,9 +21,10 @@ https://www.quledu.net/
 http://www.ddxsku.com/
 http://www.biqu6.com/
 https://www.wenshulou.cc/
-https://www.php.baby/
-https://www.golglo.com/
-http://www.aiduxshuo.com/
+http://www.auutea.com/
+http://www.55shuba.com/
+http://www.39shubao.com/
+https://www.23xsw.cc/
 )
 
 function checkSystem()
@@ -56,7 +57,6 @@ function checkSystem()
 
 function getData()
 {
-    $pm install -y bind-utils curl
     IP=`curl -s -4 icanhazip.com`
     echo " "
     echo " 本脚本为trojan一键脚本，运行之前请确认如下条件已经具备："
@@ -78,12 +78,12 @@ function getData()
         fi
     done
     
-    res=`host ${domain}`
-    res=`echo -n ${res} | grep ${IP}`
+    domain=${domain,,}
+    resolve=`curl -s https://hijk.art/hostip.php?d=${domain}`
+    res=`echo -n ${resolve} | grep ${IP}`
     if [ -z "${res}" ]; then
-        echo -n "${domain} 解析结果："
-        host ${domain}
-        echo "主机未解析到当前服务器IP(${IP})!"
+        echo "${domain} 解析结果：${resolve}"
+        echo -e "${red}主机未解析到当前服务器IP(${IP})!${plain}"
         exit 1
     fi
 
@@ -92,6 +92,10 @@ function getData()
     
     read -p "请输入trojan端口[100-65535的一个数字，默认443]：" port
     [ -z "${port}" ] && port=443
+    if [ "${port:0:1}" = "0" ]; then
+        echo -e "${red}端口不能以0开头${plain}"
+        exit 1
+    fi
 
     read -p "是否安装BBR（安装请按y，不安装请输n，不输则默认安装）:" needBBR
     [ -z "$needBBR" ] && needBBR=y
@@ -116,15 +120,19 @@ function preinstall()
     fi
     echo "安装必要软件"
     if [ "$pm" = "yum" ]; then
-        yum install -y epel-release telnet wget vim net-tools ntpdate unzip tar
+        yum install -y epel-release telnet wget vim unzip tar
         res=`which wget`
         [ "$?" != "0" ] && yum install -y wget
+        yum install -y net-tools
+        yum install -y ntpdate
         res=`which netstat`
         [ "$?" != "0" ] && yum install -y net-tools
     else
-        apt install -y telnet wget vim net-tools ntpdate unzip gcc g++ tar
+        apt install -y telnet wget vim unzip gcc g++ tar
         res=`which wget`
         [ "$?" != "0" ] && apt install -y wget
+        apt install -y net-tools
+        apt install -y ntpdate
         res=`which netstat`
         [ "$?" != "0" ] && apt install -y net-tools
         apt autoremove -y
@@ -143,7 +151,7 @@ function installTrojan()
 
     CONFIG_FILE=/usr/local/etc/trojan/config.json
     if [ ! -f $CONFIG_FILE ]; then
-        echo "安装失败，请到 https://www.hijk.pw 反馈"
+        echo "安装失败，请到 https://hijk.art 反馈"
         exit 1
     fi
 
@@ -193,7 +201,7 @@ function installNginx()
     fi
     res=`which pip3`
     if [ "$?" != "0" ]; then
-        echo -e " pip3安装失败，请到 ${red}https://www.hijk.pw${plain} 反馈"
+        echo -e " pip3安装失败，请到 ${red}https://hijk.art${plain} 反馈"
         exit 1
     fi
     pip3 install --upgrade pip
@@ -213,13 +221,16 @@ function installNginx()
     fi
     certbot certonly --standalone --agree-tos --register-unsafely-without-email -d ${domain}
     if [ "$?" != "0" ]; then
-        echo -e " 获取证书失败，请到 ${red}https://www.hijk.pw${plain} 反馈"
+        echo -e " 获取证书失败，请到 ${red}https://hijk.art${plain} 反馈"
         exit 1
     fi
 
     if [ ! -f /etc/nginx/nginx.conf.bak ]; then
         mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
     fi
+    mkdir -p /usr/share/nginx/html;
+    echo 'User-Agent: *' > /usr/share/nginx/html/robots.txt
+    echo 'Disallow: /' >> /usr/share/nginx/html/robots.txt
     cat > /etc/nginx/nginx.conf<<-EOF
 user nginx;
 worker_processes auto;
@@ -262,7 +273,13 @@ EOF
 server {
     listen 80;
     server_name ${domain};
-    rewrite ^(.*) https://\$server_name:${port}\$1 permanent;
+    root /usr/share/nginx/html;
+    location / {
+        return 301 https://\$server_name:${port}\$request_uri;
+    }
+    
+    location = /robots.txt {
+    }
 }
 EOF
     sed -i '/certbot/d' /etc/crontab
@@ -337,7 +354,7 @@ function info()
     [ -z "$res" ] && status="${red}已停止${plain}" || status="${green}正在运行${plain}"
     
     CONFIG_FILE=/usr/local/etc/trojan/config.json
-    ip=`cat $CONFIG_FILE | grep cert | cut -d/ -f5`
+    ip=`cat $CONFIG_FILE | grep -m1 cert | cut -d/ -f5`
     port=`cat $CONFIG_FILE | grep local_port | cut -d: -f2 | tr -d \",' '`
     line1=`grep -n 'password' $CONFIG_FILE  | head -n1 | cut -d: -f1`
     line11=`expr $line1 + 1`

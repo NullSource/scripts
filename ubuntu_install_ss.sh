@@ -1,10 +1,10 @@
 #!/bin/bash
 # shadowsocks/ss Ubuntu一键安装脚本
-# Author: hijk<https://www.hijk.pw>
+# Author: hijk<https://hijk.art>
 
 echo "#############################################################"
 echo "#         Ubuntu TLS Shadowsocks/SS  一键安装脚本            #"
-echo "# 网址: https://www.hijk.pw                                 #"
+echo "# 网址: https://hijk.art                                  #"
 echo "# 作者: hijk                                                #"
 echo "#############################################################"
 echo ""
@@ -51,6 +51,10 @@ function getData()
     do
         read -p "请设置SS的端口号[1025-65535]:" port
         [ -z "$port" ] && port="12345"
+        if [ "${port:0:1}" = "0" ]; then
+            echo -e "${red}端口不能以0开头${plain}"
+            exit 1
+        fi
         expr $port + 0 &>/dev/null
         if [ $? -eq 0 ]; then
             if [ $port -ge 1025 ] && [ $port -le 65535 ]; then
@@ -81,9 +85,9 @@ function getData()
     echo "13)chacha20-ietf"
     echo "14)chacha20-ietf-poly1305"
     echo "15)xchacha20-ietf-poly1305"
-    read -p "请选择（默认aes-256-cfb）" answer
+    read -p "请选择（默认aes-256-gcm）" answer
     if [ -z "$answer" ]; then
-        method="aes-256-cfb"
+        method="aes-256-gcm"
     else
         case $answer in
         1)
@@ -132,8 +136,8 @@ function getData()
             method="xchacha20-ietf-poly1305"
             ;;
         *)
-            echo "无效的选择，使用默认的aes-256-cfb"
-            method="aes-256-cfb"
+            echo "无效的选择，使用默认的aes-256-gcm"
+            method="aes-256-gcm"
         esac
     fi
     echo ""
@@ -149,10 +153,15 @@ function preinstall()
     apt update && apt upgrade -y
     
     echo "安装必要软件"
-    apt install -y telnet wget vim net-tools unzip tar
-    apt install -y make openssl libssl-dev gettext gcc autoconf libtool automake make asciidoc xmlto libudns-dev libev-dev libpcre3 libpcre3-dev libmbedtls10 libmbedtls-dev libsodium18 libsodium-dev libc-ares2 libc-ares-dev gcc g++
+    apt install -y telnet wget vim net-tools unzip tar qrencode
+    apt install -y make openssl libssl-dev gettext gcc autoconf libtool automake make asciidoc xmlto libudns-dev libev-dev libpcre3 libpcre3-dev libmbedtls-dev libsodium-dev libc-ares2 libc-ares-dev gcc g++
+    apt install -y libsodium18
     if [ "$?" != "0" ]; then
-        apt install -y make openssl libssl-dev gettext gcc autoconf libtool automake make asciidoc xmlto libudns-dev libev-dev libpcre3 libpcre3-dev libmbedtls10 libmbedtls-dev libsodium23 libsodium-dev libc-ares2 libc-ares-dev gcc g++
+        apt install -y libsodium23
+    fi
+    apt install -y libmbedtls10
+    if [ "$?" != "0" ]; then
+        apt install -y libmbedtls12
     fi
     apt autoremove -y
     res=`which wget`
@@ -177,7 +186,7 @@ function installSS()
         make && make install
         if [ $? -ne 0 ]; then
             echo
-            echo -e "[${red}错误${plain}] Shadowsocks-libev 安装失败！ 请打开 https://www.hijk.pw 反馈"
+            echo -e "[${red}错误${plain}] Shadowsocks-libev 安装失败！ 请打开 https://hijk.art 反馈"
             cd ${BASE} && rm -rf shadowsocks-libev-3.3.4*
             exit 1
         fi
@@ -208,7 +217,7 @@ EOF
  cat > /lib/systemd/system/shadowsocks-libev.service <<-EOF
 [Unit]
 Description=shadowsocks
-Documentation=https://www.hijk.pw/
+Documentation=https://hijk.art/
 After=network-online.target
 Wants=network-online.target
 
@@ -267,6 +276,7 @@ function installBBR()
 
 function info()
 {
+    apt install -y qrencode
     ip=`curl -s -4 icanhazip.com`
     port=`cat /etc/shadowsocks-libev/config.json | grep server_port | cut -d: -f2 | tr -d \",' '`
     res=`netstat -nltp | grep ${port} | grep 'ss-server'`
@@ -274,6 +284,9 @@ function info()
     password=`cat /etc/shadowsocks-libev/config.json | grep password | cut -d: -f2 | tr -d \",' '`
     method=`cat /etc/shadowsocks-libev/config.json | grep method | cut -d: -f2 | tr -d \",' '`
     
+    res=`echo -n ${method}:${password}@${ip}:${port} | base64 -w 0`
+    link="ss://${res}"
+
     echo ============================================
     echo -e " ss运行状态：${status}"
     echo -e " ss配置文件：${red}/etc/shadowsocks-libev/config.json${plain}"
@@ -283,8 +296,9 @@ function info()
     echo -e " 端口(port)：${red}${port}${plain}"
     echo -e " 密码(password)：${red}${password}${plain}"
     echo -e " 加密方式(method)： ${red}${method}${plain}"
-    echo  
-    echo ============================================
+    echo
+    echo " ss链接： ${link}"
+    qrencode -o - -t utf8 ${link}
 }
 
 function bbrReboot()
